@@ -76,7 +76,7 @@ endif
 # BoringSSL needs cmake and golang
 .PHONY: boringssl
 boringssl:
-	cd boringssl && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j8
+	cd boringssl && mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=true .. && make -j8
 
 # Builds all examples
 .PHONY: examples
@@ -86,7 +86,29 @@ examples: default
 swift_examples:
 	swiftc -O -I . examples/swift_http_server/main.swift uSockets.a -o swift_http_server
 
+commands.log:
+	rm -f commands.log
+	for f in src/*.h src/internal/*.h src/internal/eventing/* src/internal/networking/*; do \
+		echo $(CC) $(CFLAGS) -flto -c "$$f" -o "$$f.gch" >> commands.log; \
+	done
+	for f in src/*.c src/eventing/*.c src/crypto/*.c; do \
+		echo $(CC) $(CFLAGS) -flto -c "$$f" -o $$(basename "$$f" ".c").o >> commands.log; \
+	done
+	for f in src/crypto/*.cpp; do \
+		echo $(CXX) $(CXXFLAGS) -std=c++17 -flto -c "$$f" -o $$(basename "$$f" ".cpp").o >> commands.log; \
+	done
+	for f in examples/*.c; do \
+		echo $(CC) -flto $(CFLAGS) -c "$$f" -o $$(basename "$$f" ".c").o >> commands.log; \
+	done
+	echo $(CXX) $(CXXFLAGS) -std=c++14 -flto -Isrc -O3 -c src/eventing/asio.cpp -o asio.o >> commands.log;
+
+.PHONY: commands
+commands: commands.log
+
+.PHONY: clean
 clean:
+	rm -f commands.log
+	for f in examples/*.c; do rm -f $$(basename "$$f" ".c"); done
 	rm -f *.o
 	rm -f *.a
 	rm -rf .certs
